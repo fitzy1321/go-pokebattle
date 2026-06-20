@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -100,6 +101,13 @@ func main() {
 		setup.DataSeeding()
 	}
 
+	buf := bufio.NewReader(os.Stdin)
+	fmt.Print("> ")
+	_, err = buf.ReadBytes('\n')
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	// open gorm and sqlite db
 	db, err := setup.SqliteDb(db_path)
 	if err != nil {
@@ -115,10 +123,10 @@ func main() {
 		return
 	}
 
-	// // print pokemon
-	// for _, k := range pokedex {
-	// 	fmt.Printf("Pokemon Id: %d Name: %s Type: %s\n", k.Id, k.Name, k.Type_1)
-	// }
+	// print pokemon
+	for _, k := range pokedex {
+		fmt.Printf("Pokemon Id: %d Name: %s Type: %s\n", k.Id, k.Name, k.Type_1)
+	}
 
 	// // get al moves
 	// var movedex []Move
