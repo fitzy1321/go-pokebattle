@@ -12,6 +12,8 @@ import (
 )
 
 const BASE_URL string = "https://pokeapi.co/api/v2"
+const SPRITE_URL_BASE string = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-i/red-blue/transparent"
+
 const POKEMON_COUNT int = 151
 
 func SqliteDb(db_path string) (*gorm.DB, error) {
@@ -19,30 +21,131 @@ func SqliteDb(db_path string) (*gorm.DB, error) {
 }
 
 func DataSeeding() {
+	pokeDataChan := make(chan fullPokeData, POKEMON_COUNT)
 	var wg sync.WaitGroup
-	var pokeId int
-	var pokemon_url string
 	for i := range POKEMON_COUNT {
-		pokeId = i + 1
-		pokemon_url = fmt.Sprintf("%s/pokemon/%d", BASE_URL, pokeId)
+		pokeId := i + 1
+		pokemon_url := fmt.Sprintf("%s/pokemon/%d", BASE_URL, pokeId)
+
 		wg.Add(1)
-		go func(url string) {
+		go func(url string, pokeId int) {
 			defer wg.Done()
-			resp, err := http.Get(url)
+
+			pokemondata, err := fetchPokeAPI(url)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return
 			}
-			defer resp.Body.Close()
 
-			var data map[string]any
-			if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return
+			type_1, type_2 := getTypes(pokemondata)
+
+			pokeDataChan <- fullPokeData{
+				Id:              pokeId,
+				Name:            pokemondata["name"].(string),
+				Type_1:          type_1,
+				Type_2:          type_2,
+				Base_experience: int(pokemondata["base_experience"].(float64)),
+				Stats:           getStats(pokemondata),
 			}
-			fmt.Println(data["name"])
 
-		}(pokemon_url)
+		}(pokemon_url, pokeId)
 	}
 	wg.Wait()
+	close(pokeDataChan)
+
+	var fullAPIData []fullPokeData
+	for item := range pokeDataChan {
+		fullAPIData = append(fullAPIData, item)
+		fmt.Printf("Showing results I guess. %v\n", item)
+	}
+}
+
+type movesData struct {
+}
+
+type nextEvoData struct {
+	Evolves_into_id int
+	Trigger         string
+	Min_level       int
+	Item            *string // nullable
+}
+
+type fullPokeData struct {
+	Id              int
+	Name            string
+	Type_1          string
+	Type_2          *string // nullable
+	Base_experience int
+	Stats           map[string]int
+	Moves           []movesData
+	Next_evolutions []nextEvoData
+	Growth_Rate     string
+	Front_sprite    []byte
+	Back_sprite     []byte
+}
+
+func getStats(data map[string]any) map[string]int {
+	stats := make(map[string]int)
+	for _, v := range data["stats"].([]any) {
+		tm := v.(map[string]any)
+		name := tm["stat"].(map[string]any)["name"].(string)
+		baseStat := int(tm["base_stat"].(float64))
+
+		// need to fix a couple strings
+		switch name {
+		case "special-attack":
+			name = "special_attack"
+		case "special-defense":
+			name = "special_defense"
+		}
+
+		stats[name] = baseStat
+	}
+	return stats
+}
+
+func fetchPokeAPI(url string) (map[string]any, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var pokemondata map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&pokemondata); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return nil, err
+	}
+	return pokemondata, nil
+}
+
+//	func getSprites(pokeId int) ([]byte, []byte) {
+//		front_resp, front_err := http.Get(fmt.Sprintf("%s/%d", SPRITE_URL_BASE, pokeId))
+//		back_resp, back_err := http.Get(fmt.Sprintf("%s/back/%d", SPRITE_URL_BASE, pokeId))
+//	}
+
+func getTypes(data map[string]any) (string, *string) {
+	var type_1 string
+	var type_2 *string
+	for _, t := range data["types"].([]any) {
+		tm := t.(map[string]any)
+		slot := int(tm["slot"].(float64))
+		tmpVar := tm["type"].(map[string]any)["name"].(string)
+		var name *string = nil
+		if tmpVar != "" {
+			name = &tmpVar
+		}
+
+		switch slot {
+		case 1:
+			// type_1 should always be there, so normal string works
+			type_1 = *name
+		case 2:
+			// type_2 can be null, so this should be a pointer
+			type_2 = name
+		default:
+			// pass
+		}
+	}
+	return type_1, type_2
 }
