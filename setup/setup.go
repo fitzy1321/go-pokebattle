@@ -3,6 +3,7 @@ package setup
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -20,11 +21,44 @@ func GetSqliteDb(db_path string) (*gorm.DB, error) {
 	return gorm.Open(sqlite.Open(db_path), &gorm.Config{})
 }
 
-func CreateSqliteDb(data []fullPokeData, path string) error {
-	return nil
+func FetchDataAndCreateSqliteDb(db_path string) error {
+	return createSqliteDb(fetchFromPokeAPI(), db_path)
 }
 
-func FetchFromPokeAPI() []fullPokeData {
+type fullPokeData struct {
+	Id              uint
+	Name            string
+	Type_1          string
+	Type_2          *string // nullable
+	Base_experience uint
+	Stats           statsData
+	Moves           []movesData
+	Next_evolutions []nextEvoData
+	Growth_Rate     string
+	Front_sprite    []byte
+	Back_sprite     []byte
+}
+
+type statsData struct {
+	Attack          int
+	Defense         int
+	Hp              int
+	Special_Attack  int
+	Special_Defense int
+	Speed           int
+}
+
+type movesData struct {
+}
+
+type nextEvoData struct {
+	Evolves_into_id uint
+	Trigger         string
+	Min_level       uint
+	Item            *string // nullable
+}
+
+func fetchFromPokeAPI() []fullPokeData {
 	// WARN: buffered channel, don't change unless you know what you're doing (more than me 🙃).
 	// WARN: concurrency gremlins will appear
 	pokeDataChan := make(chan fullPokeData, POKEMON_COUNT)
@@ -38,6 +72,7 @@ func FetchFromPokeAPI() []fullPokeData {
 		go func(url string, pokeId uint) {
 			defer wg.Done()
 
+			// * First PokeAPI requesr
 			pokemondata, err := fetchPokeAPI(url)
 			if err != nil {
 				// TODO: is this the best way to handle this error?
@@ -45,7 +80,11 @@ func FetchFromPokeAPI() []fullPokeData {
 				return
 			}
 
+			// TODO: Move Data
+			// TODO: Collect/Fetch Species and Next Evolution Data
+
 			type_1, type_2 := getTypes(pokemondata)
+			frontSprite, backSprite, err := getSprites(pokeId)
 
 			pokeDataChan <- fullPokeData{
 				Id:              pokeId,
@@ -53,11 +92,18 @@ func FetchFromPokeAPI() []fullPokeData {
 				Type_1:          type_1,
 				Type_2:          type_2,
 				Base_experience: uint(pokemondata["base_experience"].(float64)),
-				Stats:           getStats(pokemondata),
+				Stats:           *getStats(pokemondata),
+				Moves:           []movesData{},   // TODO
+				Next_evolutions: []nextEvoData{}, // TODO
+				Growth_Rate:     "",              // TODO
+				Front_sprite:    frontSprite,
+				Back_sprite:     backSprite,
 			}
-
+			// end go func
 		}(pokemon_url, pokeId)
+		// end forloop
 	}
+
 	// * Wait for all goroutines and close the channel
 	wg.Wait()
 	// this may not get called if the buffered channel is changed, btw
@@ -75,94 +121,18 @@ func FetchFromPokeAPI() []fullPokeData {
 	return fullAPIData
 }
 
-type movesData struct {
-}
-
-type nextEvoData struct {
-	Evolves_into_id uint
-	Trigger         string
-	Min_level       uint
-	Item            *string // nullable
-}
-
-type fullPokeData struct {
-	Id              uint
-	Name            string
-	Type_1          string
-	Type_2          *string // nullable
-	Base_experience uint
-	Stats           map[string]int
-	Moves           []movesData
-	Next_evolutions []nextEvoData
-	Growth_Rate     string
-	Front_sprite    []byte
-	Back_sprite     []byte
-}
-
-func getStats(data map[string]any) map[string]int {
-	stats := make(map[string]int)
-	for _, v := range data["stats"].([]any) {
-		tm := v.(map[string]any)
-		name := tm["stat"].(map[string]any)["name"].(string)
-		baseStat := int(tm["base_stat"].(float64))
-
-		// need to fix a couple strings
-		switch name {
-		case "special-attack":
-			name = "special_attack"
-		case "special-defense":
-			name = "special_defense"
-		}
-
-		stats[name] = baseStat
-	}
-	return stats
-}
-
-func fetchPokeAPI(url string) (map[string]any, error) {
-	resp, err := http.Get(url)
+func createSqliteDb(data []fullPokeData, path string) error {
+	_, err := GetSqliteDb(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer resp.Body.Close()
 
-	var pokemondata map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&pokemondata); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return nil, err
-	}
-	return pokemondata, nil
-}
+	// TODO: Create Table Schema
+	// TODO: Make sure foreign Keys are on for sqlite
+	// TODO: ETL go struct to sql inserts
+	// TODO: commit, cleanup, exit
 
-//	func getSprites(pokeId int) ([]byte, []byte) {
-//		front_resp, front_err := http.Get(fmt.Sprintf("%s/%d", SPRITE_URL_BASE, pokeId))
-//		back_resp, back_err := http.Get(fmt.Sprintf("%s/back/%d", SPRITE_URL_BASE, pokeId))
-//	}
-
-func getTypes(data map[string]any) (string, *string) {
-	var type_1 string
-	var type_2 *string
-	for _, t := range data["types"].([]any) {
-		tm := t.(map[string]any)
-		slot := int(tm["slot"].(float64))
-		tmpVar := tm["type"].(map[string]any)["name"].(string)
-		var name *string = nil
-		if tmpVar != "" {
-			name = &tmpVar
-		}
-
-		switch slot {
-		case 1:
-			// type_1 should always be there, so normal string works
-			type_1 = *name
-		case 2:
-			// type_2 can be null, so this should be a pointer
-			type_2 = name
-		default:
-			// pass
-		}
-	}
-	return type_1, type_2
+	return nil
 }
 
 // func osLevelStuff() error {
@@ -193,3 +163,98 @@ func getTypes(data map[string]any) (string, *string) {
 
 // 	return nil
 // }
+
+func _spriteHandler(resp *http.Response) ([]byte, error) {
+	if resp.Header.Get("Content-Type") == "image/png" {
+		return io.ReadAll(resp.Body)
+	}
+	return nil, fmt.Errorf("Wrong Content-Type from network response.%v", resp.Header.Get("Content-Type"))
+}
+
+func getSprites(pokeId uint) (ftSprite []byte, bkSprite []byte, err error) {
+	err = nil
+
+	url := fmt.Sprintf("%s/%d.png", SPRITE_URL_BASE, pokeId)
+	ftResp, ftRspErr := http.Get(url)
+	if ftRspErr != nil {
+		err = ftRspErr
+	}
+	defer ftResp.Body.Close()
+
+	ftSprite, ftErr := _spriteHandler(ftResp)
+	if ftErr != nil {
+		err = ftErr
+	}
+
+	url = fmt.Sprintf("%s/back/%d.png", SPRITE_URL_BASE, pokeId)
+	bkResp, bkRspErr := http.Get(url)
+	if bkRspErr != nil {
+		err = bkRspErr
+	}
+	defer bkResp.Body.Close()
+
+	bkSprite, bkErr := _spriteHandler(bkResp)
+	if bkErr != nil {
+		err = bkErr
+	}
+	return
+}
+
+func getStats(data map[string]any) *statsData {
+	stats := make(map[string]int)
+	for _, v := range data["stats"].([]any) {
+		tm := v.(map[string]any)
+		name := tm["stat"].(map[string]any)["name"].(string)
+		baseStat := int(tm["base_stat"].(float64))
+		stats[name] = baseStat
+	}
+	return &statsData{
+		Attack:          stats["attack"],
+		Defense:         stats["defense"],
+		Hp:              stats["hp"],
+		Special_Attack:  stats["special-attack"],
+		Special_Defense: stats["special-defense"],
+		Speed:           stats["speed"],
+	}
+}
+
+func fetchPokeAPI(url string) (map[string]any, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var pokemondata map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&pokemondata); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return nil, err
+	}
+	return pokemondata, nil
+}
+
+func getTypes(data map[string]any) (string, *string) {
+	var type_1 string
+	var type_2 *string
+	for _, t := range data["types"].([]any) {
+		tm := t.(map[string]any)
+		slot := int(tm["slot"].(float64))
+		tmpVar := tm["type"].(map[string]any)["name"].(string)
+		var name *string = nil
+		if tmpVar != "" {
+			name = &tmpVar
+		}
+
+		switch slot {
+		case 1:
+			// type_1 should always be there, so normal string works
+			type_1 = *name
+		case 2:
+			// type_2 can be null, so this should be a pointer
+			type_2 = name
+		default:
+			// pass
+		}
+	}
+	return type_1, type_2
+}

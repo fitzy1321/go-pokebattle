@@ -70,18 +70,12 @@ func main() {
 	db_path := "pokedata.db"
 	// exists, err := dbPathExists(db_path)
 	// if !exists || err != nil {
-	// 	// call api and setup sqlitedb
-	// 	apiPokeData := setup.FetchFromPokeAPI()
-	// 	setup.CreateSqliteDb(apiPokeData)
+	// 	// * Fetch Data From PokeAPI, Create SQLite DB, seeded with API Data
+	// 	setup.FetchDataAndCreateSqliteDb(db_path)
 	// }
 
-	// * Fetch Data From PokeAPI
-	apiPokeData := setup.FetchFromPokeAPI()
-
-	// * Create SQLite DB, seed with API Data
-	setup.CreateSqliteDb(apiPokeData, db_path)
-
-	fmt.Println("Length of pointer to array in main:", len(apiPokeData), "capacity:", cap(apiPokeData))
+	// * Fetch Data From PokeAPI, Create SQLite DB, seeded with API Data
+	setup.FetchDataAndCreateSqliteDb(db_path)
 
 	// * Wait for terminal input
 	buf := bufio.NewReader(os.Stdin)
