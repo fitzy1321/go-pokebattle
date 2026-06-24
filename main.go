@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,7 +9,7 @@ import (
 	"go-pokebattle/setup"
 )
 
-// ! gorm struct, do not change the member names
+// WARN: gorm struct, do not change the member names
 type Pokemon struct {
 	Id              uint `gorm:"primaryKey"`
 	Name            string
@@ -32,7 +31,7 @@ func (Pokemon) TableName() string {
 	return "dex_pokemon"
 }
 
-// ! gorm struct, do not change the member names
+// WARN: gorm struct, do not change the member names
 type Move struct {
 	Id             uint `gorm:"primaryKey"`
 	Name           string
@@ -67,6 +66,14 @@ func dbPathExists(path string) (bool, error) {
 }
 
 func main() {
+	// * Catch all panics!
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+	}()
+
 	db_path := "pokedata.db"
 	// exists, err := dbPathExists(db_path)
 	// if !exists || err != nil {
@@ -75,15 +82,14 @@ func main() {
 	// }
 
 	// * Fetch Data From PokeAPI, Create SQLite DB, seeded with API Data
-	setup.FetchDataAndCreateSqliteDb(db_path)
+	// setup.FetchDataAndCreateSqliteDb(db_path)
+	data := setup.FetchPokemonData()
+	fmt.Println("Length of pokemon data from api:", len(data))
+	setup.CreateSqliteDb(data, db_path)
 
 	// * Wait for terminal input
-	buf := bufio.NewReader(os.Stdin)
 	fmt.Print("> ")
-	_, err := buf.ReadBytes('\n')
-	if err != nil {
-		fmt.Println(err)
-	}
+	fmt.Scanln()
 
 	// * Get Gorm/Sqlite DB
 	db, err := setup.GetSqliteDb(db_path)
@@ -92,7 +98,7 @@ func main() {
 		return
 	}
 
-	// * Get all Pokemon
+	// * Get all Pokemon from db
 	var pokedex []Pokemon
 	result := db.Find(&pokedex)
 	if result.Error != nil {
@@ -100,12 +106,12 @@ func main() {
 		return
 	}
 
-	// * Print Pokemon data, coming from sqlite
+	// * Print Pokemons
 	for _, k := range pokedex {
 		fmt.Printf("Pokemon Id: %d Name: %s Type: %s\n", k.Id, k.Name, k.Type_1)
 	}
 
-	// // * get al moves
+	// // * Get all moves from db
 	// var movedex []Move
 	// result = db.Find(&movedex)
 	// if result.Error != nil {
@@ -113,7 +119,7 @@ func main() {
 	// 	return
 	// }
 
-	// // * print all moves
+	// // * Print moves
 	// for _, k := range movedex {
 	// 	fmt.Printf("Move id: %d, Name: %s\n", k.Id, k.Name)
 	// }
