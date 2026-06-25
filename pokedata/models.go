@@ -6,13 +6,13 @@ type Pokemon struct {
 	Name            string
 	Type_1          string
 	Type_2          *string
-	Base_hp         uint
-	Base_attack     uint
-	Base_defense    uint
-	Base_sp_attack  uint
-	Base_sp_defense uint
-	Base_speed      uint
-	Base_experience *uint
+	Base_hp         int
+	Base_attack     int
+	Base_defense    int
+	Base_sp_attack  int
+	Base_sp_defense int
+	Base_speed      int
+	Base_experience *int
 	Growth_rate     *string
 	Front_sprite    []byte
 	Back_sprite     []byte
@@ -26,15 +26,15 @@ func (Pokemon) TableName() string {
 type Move struct {
 	Id             uint `gorm:"primaryKey"`
 	Name           string
-	Power          *uint
-	Accuracy       *uint
-	Max_pp         uint
+	Power          *int
+	Accuracy       *int
+	Max_pp         int
 	Type           *string
 	Damage_class   *string
 	Ailment        *string
-	Ailment_chance *uint
+	Ailment_chance *int
 	Move_category  *string
-	Healing        *uint
+	Healing        *int
 	Drain          *int
 }
 
