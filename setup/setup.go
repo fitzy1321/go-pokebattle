@@ -20,17 +20,15 @@ const (
 
 type dict = map[string]any
 
+// Initialize gorm and sqlite, without a full rebuild step
 func GetSqliteDb(db_path string) (*gorm.DB, error) {
 	return internalGormDbSetup(db_path)
 }
 
-func CreateSqliteDb(data []fullPokeData, path string) error {
+// Rebuild sqlite db and initialize gorm. May cause problems if file already exists
+func CreateSqliteDb(data []fullPokeData, path string) (*gorm.DB, error) {
 	return createSqliteDb(data, path)
 }
-
-// func FetchDataAndCreateSqliteDb(db_path string) error {
-// 	return CreateSqliteDb(FetchPokemonData(), db_path)
-// }
 
 func FetchPokemonData() []fullPokeData {
 	// WARN: buffered channel, don't change unless you know what you're doing (more than me 🙃).
