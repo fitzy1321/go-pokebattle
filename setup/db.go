@@ -9,6 +9,10 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	FOREIGNKEYSTR string = "?_foreign_keys=on"
+)
+
 // Initialize gorm and sqlite, without a full rebuild step
 func GetSqliteDb(db_path string) (*gorm.DB, error) {
 	return internalGormDbSetup(db_path)
@@ -20,14 +24,21 @@ func CreateSqliteDb(data []FullPokeData, path string) (*gorm.DB, error) {
 }
 
 func createSqliteDb(data []FullPokeData, dbPath string) (*gorm.DB, error) {
+	fmt.Println("Initializing db @filepath:", dbPath)
+
 	db, err := internalGormDbSetup(dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&dex.Pokemon{}, &dex.Move{}, &dex.PokemonMove{}, &dex.Evolution{})
+	err = db.AutoMigrate(
+		&dex.Pokemon{},
+		&dex.Move{},
+		&dex.PokemonMove{},
+		&dex.Evolution{},
+	)
 	if err != nil {
-		return nil, err
+		return db, err
 	}
 
 	// TODO: insert data from fullPokeData slices, scrapped from PokeAPI
@@ -36,13 +47,9 @@ func createSqliteDb(data []FullPokeData, dbPath string) (*gorm.DB, error) {
 }
 
 func internalGormDbSetup(dbPath string) (*gorm.DB, error) {
-	const fkstr string = "?_foreign_keys=on"
-
-	if !strings.Contains(dbPath, fkstr) {
-		dbPath = fmt.Sprintf("%s%s", dbPath, fkstr)
+	if !strings.Contains(dbPath, FOREIGNKEYSTR) {
+		dbPath = fmt.Sprintf("%s%s", dbPath, FOREIGNKEYSTR)
 	}
-
-	fmt.Println(dbPath)
 
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
