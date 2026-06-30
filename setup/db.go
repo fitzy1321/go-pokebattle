@@ -13,8 +13,8 @@ const (
 	FOREIGNKEYSTR string = "?_foreign_keys=on"
 )
 
-// Initialize gorm and sqlite, without a full rebuild step
-func GetSqliteDb(dbPath string) (*gorm.DB, error) {
+// Open a connection to sqlite and initalize gorm
+func GetGormSqliteDB(dbPath string) (*gorm.DB, error) {
 	if !strings.Contains(dbPath, FOREIGNKEYSTR) {
 		dbPath = fmt.Sprintf("%s%s", dbPath, FOREIGNKEYSTR)
 	}
@@ -32,10 +32,10 @@ func GetSqliteDb(dbPath string) (*gorm.DB, error) {
 }
 
 // This will take data from the api and try to create and insert sqlite tables and data
-func CreateSqliteDb(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
+func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 	fmt.Println("Initializing db @filepath:", dbPath)
 
-	db, err := GetSqliteDb(dbPath)
+	db, err := GetGormSqliteDB(dbPath)
 	if err != nil {
 		return nil, err
 	}
@@ -51,23 +51,48 @@ func CreateSqliteDb(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 	}
 
 	pokemon := make([]dex.Pokemon, 0, GEN1POKEMONCOUNT)
-	for _, item := range apiData {
+	var moves []dex.Move
+	var pokemonMoves []dex.PokemonMove
+
+	for _, pitem := range apiData {
 		pokemon = append(pokemon, dex.Pokemon{
-			ID:             item.Id,
-			Name:           item.Name,
-			Type1:          item.Type1,
-			Type2:          item.Type2,
-			HP:             item.Hp,
-			Attack:         item.Attack,
-			Defense:        item.Defense,
-			SpAttack:       item.SpecialAttack,
-			SpDefense:      item.SpecialDefense,
-			Speed:          item.Speed,
-			BaseExperience: item.BaseExperience,
-			GrowthRate:     item.GrowthRate,
-			FrontSprite:    item.Sprites.front,
-			BackSprite:     item.Sprites.back,
+			ID:             pitem.Id,
+			Name:           pitem.Name,
+			Type1:          pitem.Type1,
+			Type2:          pitem.Type2,
+			HP:             pitem.Hp,
+			Attack:         pitem.Attack,
+			Defense:        pitem.Defense,
+			SpAttack:       pitem.SpecialAttack,
+			SpDefense:      pitem.SpecialDefense,
+			Speed:          pitem.Speed,
+			BaseExperience: pitem.BaseExperience,
+			GrowthRate:     pitem.GrowthRate,
+			FrontSprite:    pitem.Sprites.front,
+			BackSprite:     pitem.Sprites.back,
 		})
+		for _, mitem := range pitem.Moves {
+			moves = append(moves, dex.Move{
+				Name:          mitem.Name,
+				Power:         mitem.Power,
+				Accuracy:      mitem.Accuracy,
+				MaxPP:         mitem.MaxPp,
+				Type:          mitem.Type,
+				DamageClass:   mitem.DamageClass,
+				Ailment:       mitem.Ailment,
+				AilmentChance: mitem.AilmentChance,
+				Category:      mitem.MoveCategory,
+				Healing:       mitem.Healing,
+				Drain:         mitem.Drain,
+				// TODO finish this
+			})
+			pokemonMoves = append(pokemonMoves, dex.PokemonMove{
+				PokemonID:    pitem.Id,
+				MoveID:       mitem.Id,
+				LevelLearned: mitem.LevelLearned,
+				LearnMethod:  mitem.LearnMethod,
+			})
+		}
 	}
 
 	tx := db.CreateInBatches(pokemon, len(pokemon))

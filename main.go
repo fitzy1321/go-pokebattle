@@ -49,15 +49,19 @@ func main() {
 		// data := setup.FetchPokemonData()
 		// fmt.Println("Length of pokemon data from api:", len(data))
 		// * Fetch Data From PokeAPI, Create SQLite DB, seeded with API Data
-		db, err = setup.FetchDataAndCreateDB(dbPath)
-		if err != nil {
-			printErrExit(fmt.Errorf("Something failed creating pokemon db: %+v\n", err))
+		var errs []error
+		db, errs = setup.FetchDataAndCreateDB(dbPath)
+		if errs != nil || len(errs) != 0 {
+			for _, e := range errs {
+				fmt.Fprintf(os.Stderr, "%+v", fmt.Errorf("Something failed creating pokemon db: %+v\n", e))
+			}
+			os.Exit(1)
 		}
 		// * Wait for terminal input
 		fmt.Print("> ")
 		fmt.Scanln()
 	} else {
-		db, err = setup.GetSqliteDb(dbPath)
+		db, err = setup.GetGormSqliteDB(dbPath)
 		if err != nil {
 			printErrExit(fmt.Errorf("Something failed connecting to pokemon db: %v\n", err))
 		}

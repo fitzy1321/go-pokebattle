@@ -15,9 +15,10 @@ type (
 	}
 
 	MoveData struct {
+		Id            uint
 		Name          string
-		LevelLearned  uint
-		LearnMethod   string
+		LevelLearned  int
+		LearnMethod   *string
 		MaxPp         int
 		Power         *int         // nullable
 		Accuracy      *int         // nullable

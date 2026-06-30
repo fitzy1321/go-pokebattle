@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 
 	. "go-pokebattle/result"
@@ -25,15 +24,23 @@ type (
 	dict = map[string]any
 )
 
-func FetchDataAndCreateDB(dbPath string) (*gorm.DB, error) {
-	data := FetchPokemonData()
-	if len(data) == 0 {
-		return nil, errors.New("Failed to fetch data from PokeAPI")
+// Call PokeAPI and etl into Sqlite tables
+func FetchDataAndCreateDB(dbPath string) (*gorm.DB, []error) {
+	data, errs := FetchPokemonData()
+	if errs != nil || len(errs) > 0 {
+		return nil, errs
 	}
-	return CreateSqliteDb(data, dbPath)
+	if len(data) == 0 {
+		return nil, []error{errors.New("Failed to fetch data from PokeAPI")}
+	}
+	res, err := CreateAndSeedDB(data, dbPath)
+	if err != nil {
+		return res, []error{err}
+	}
+	return res, nil
 }
 
-func FetchPokemonData() []PokeApiData {
+func FetchPokemonData() ([]PokeApiData, []error) {
 	fullApiData := make([]PokeApiData, 0, GEN1POKEMONCOUNT)
 	dataCh := make(chan Result[PokeApiData], GEN1POKEMONCOUNT)
 	sema := make(chan struct{}, 20) // cap amount of goroutines running at once
@@ -50,17 +57,18 @@ func FetchPokemonData() []PokeApiData {
 	}
 	wg.Wait()
 	close(dataCh)
+	var errs []error
 	for r := range dataCh {
 		if r.IsOk() {
 			fullApiData = append(fullApiData, r.Value)
 			fmt.Printf("Pokemon #%d, %s\n", r.Value.Id, r.Value.Name)
 			// fmt.Printf("%+v\n", r)
 		} else {
-			fmt.Fprintf(os.Stderr, "Error from goroutines: %+v", r.GetError())
+			errs = append(errs, r.GetError())
 		}
 	}
 
-	return fullApiData
+	return fullApiData, errs
 }
 
 func rawApiDataToStructs(pokeId uint) Result[PokeApiData] {
@@ -228,6 +236,8 @@ func getMovesData(pokeData dict) Result[[]MoveData] {
 			// TODO: error handle, idk man ..
 		}
 
+		mId := uint(mvData["id"].(float64))
+
 		meta, ok := mvData["meta"].(dict)
 		if !ok {
 			// TODO: error handle idk man ...
@@ -286,9 +296,10 @@ func getMovesData(pokeData dict) Result[[]MoveData] {
 		}
 
 		detailed = append(detailed, MoveData{
+			Id:            mId,
 			Name:          move.name,
-			LevelLearned:  uint(move.level),
-			LearnMethod:   move.method,
+			LevelLearned:  move.level,
+			LearnMethod:   &move.method,
 			MaxPp:         mpp,
 			Power:         power,
 			Accuracy:      acc,
