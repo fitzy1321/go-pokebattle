@@ -236,7 +236,7 @@ func getMovesData(pokeData dict) Result[[]MoveData] {
 			// TODO: error handle, idk man ..
 		}
 
-		mId := uint(mvData["id"].(float64))
+		moveId := uint(mvData["id"].(float64))
 
 		meta, ok := mvData["meta"].(dict)
 		if !ok {
@@ -247,18 +247,20 @@ func getMovesData(pokeData dict) Result[[]MoveData] {
 		statChanges := []statChange{}
 
 		var power *int = nil
-		if tp, ok := mvData["power"].(int); ok {
-			power = &tp
+		if tp, ok := mvData["power"].(float64); ok {
+			ttp := int(tp)
+			power = &ttp
 		}
 
 		var acc *int = nil
-		if tacc, ok := mvData["accuracy"].(int); ok {
-			acc = &tacc
+		if tacc, ok := mvData["accuracy"].(float64); ok {
+			ttacc := int(tacc)
+			acc = &ttacc
 		}
 
 		var mpp int = 0
-		if tmpp, ok := mvData["pp"].(int); ok {
-			mpp = tmpp
+		if tmpp, ok := mvData["pp"].(float64); ok {
+			mpp = int(tmpp)
 		}
 
 		var mtype *string = nil
@@ -276,8 +278,9 @@ func getMovesData(pokeData dict) Result[[]MoveData] {
 		}
 
 		var ailmentChance *int = nil
-		if tAilChnc, ok := meta["ailment_chance"].(int); ok {
-			ailmentChance = &tAilChnc
+		if tAilChnc, ok := meta["ailment_chance"].(float64); ok {
+			atv := int(tAilChnc)
+			ailmentChance = &atv
 		}
 
 		var moveCategory *string = nil
@@ -286,21 +289,23 @@ func getMovesData(pokeData dict) Result[[]MoveData] {
 		}
 
 		var healing *int = nil
-		if tHealing, ok := meta["healing"].(int); ok {
-			healing = &tHealing
+		if tHealing, ok := meta["healing"].(float64); ok {
+			tth := int(tHealing)
+			healing = &tth
 		}
 
 		var drain *int = nil
-		if tDrain, ok := meta["drain"].(int); ok {
-			drain = &tDrain
+		if tDrain, ok := meta["drain"].(float64); ok {
+			ttd := int(tDrain)
+			drain = &ttd
 		}
 
 		detailed = append(detailed, MoveData{
-			Id:            mId,
+			Id:            moveId,
 			Name:          move.name,
 			LevelLearned:  move.level,
 			LearnMethod:   &move.method,
-			MaxPp:         mpp,
+			MaxPP:         mpp,
 			Power:         power,
 			Accuracy:      acc,
 			Type:          mtype,
@@ -361,12 +366,12 @@ func getStats(data dict) (*stats, error) {
 	}
 
 	return &stats{
-		Attack:         mStats["attack"],
-		Defense:        mStats["defense"],
-		Hp:             mStats["hp"],
-		SpecialAttack:  mStats["special-attack"],
-		SpecialDefense: mStats["special-defense"],
-		Speed:          mStats["speed"],
+		Attack:    mStats["attack"],
+		Defense:   mStats["defense"],
+		HP:        mStats["hp"],
+		SpAttack:  mStats["special-attack"],
+		SpDefense: mStats["special-defense"],
+		Speed:     mStats["speed"],
 	}, nil
 }
 

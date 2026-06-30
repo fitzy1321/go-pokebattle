@@ -19,7 +19,7 @@ type (
 		Name          string
 		LevelLearned  int
 		LearnMethod   *string
-		MaxPp         int
+		MaxPP         int
 		Power         *int         // nullable
 		Accuracy      *int         // nullable
 		Type          *string      // TODO: should this be nullable?
@@ -34,12 +34,12 @@ type (
 	}
 
 	stats struct {
-		Attack         int
-		Defense        int
-		Hp             int
-		SpecialAttack  int
-		SpecialDefense int
-		Speed          int
+		Attack    int
+		Defense   int
+		HP        int
+		SpAttack  int
+		SpDefense int
+		Speed     int
 	}
 
 	statChange struct {

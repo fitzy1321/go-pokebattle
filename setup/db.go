@@ -5,6 +5,7 @@ import (
 	"go-pokebattle/dex"
 	"strings"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -53,6 +54,7 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 	pokemon := make([]dex.Pokemon, 0, GEN1POKEMONCOUNT)
 	var moves []dex.Move
 	var pokemonMoves []dex.PokemonMove
+	moveIdSet := mapset.NewSet[uint]()
 
 	for _, pitem := range apiData {
 		pokemon = append(pokemon, dex.Pokemon{
@@ -60,11 +62,11 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 			Name:           pitem.Name,
 			Type1:          pitem.Type1,
 			Type2:          pitem.Type2,
-			HP:             pitem.Hp,
+			HP:             pitem.HP,
 			Attack:         pitem.Attack,
 			Defense:        pitem.Defense,
-			SpAttack:       pitem.SpecialAttack,
-			SpDefense:      pitem.SpecialDefense,
+			SpAttack:       pitem.SpAttack,
+			SpDefense:      pitem.SpDefense,
 			Speed:          pitem.Speed,
 			BaseExperience: pitem.BaseExperience,
 			GrowthRate:     pitem.GrowthRate,
@@ -72,20 +74,23 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 			BackSprite:     pitem.Sprites.back,
 		})
 		for _, mitem := range pitem.Moves {
-			moves = append(moves, dex.Move{
-				Name:          mitem.Name,
-				Power:         mitem.Power,
-				Accuracy:      mitem.Accuracy,
-				MaxPP:         mitem.MaxPp,
-				Type:          mitem.Type,
-				DamageClass:   mitem.DamageClass,
-				Ailment:       mitem.Ailment,
-				AilmentChance: mitem.AilmentChance,
-				Category:      mitem.MoveCategory,
-				Healing:       mitem.Healing,
-				Drain:         mitem.Drain,
-				// TODO finish this
-			})
+			if !moveIdSet.Contains(mitem.Id) {
+				moveIdSet.Add(mitem.Id)
+				moves = append(moves, dex.Move{
+					ID:            mitem.Id,
+					Name:          mitem.Name,
+					Power:         mitem.Power,
+					Accuracy:      mitem.Accuracy,
+					MaxPP:         mitem.MaxPP,
+					Type:          mitem.Type,
+					DamageClass:   mitem.DamageClass,
+					Ailment:       mitem.Ailment,
+					AilmentChance: mitem.AilmentChance,
+					Category:      mitem.MoveCategory,
+					Healing:       mitem.Healing,
+					Drain:         mitem.Drain,
+				})
+			}
 			pokemonMoves = append(pokemonMoves, dex.PokemonMove{
 				PokemonID:    pitem.Id,
 				MoveID:       mitem.Id,
@@ -99,10 +104,15 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 	if tx.Error != nil {
 		return db, tx.Error
 	}
-	// moves := []MoveData{}
-	// for pokemon := range apiData {
-	// 	Pokemon
-	// }
+	tx = db.CreateInBatches(moves, len(moves))
+	if tx.Error != nil {
+		return db, tx.Error
+	}
+	tx = db.CreateInBatches(pokemonMoves, len(moves))
+	if tx.Error != nil {
+		return db, tx.Error
+	}
+	// TODO evolutions
 
 	return db, nil
 }

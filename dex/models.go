@@ -1,10 +1,13 @@
 package dex
 
-// WARN: gorm db structs, do not change without changing sql tables too
-
+// NOTE: thoughts about integer typing below
+// NOTE: IDs = uints, because we'll never have a negative id value.
+// NOTE: Any other integer = ints, various moves and pokemon information could have negative values.
+// NOTE: A pointer means that field/column is nullable
+// WARN: gorm db structs, do not change without understanding the consequences
 type (
 	Pokemon struct {
-		ID             uint   `gorm:"primaryKey;autoIncrement:false"`
+		ID             uint   `gorm:"primaryKey;autoIncrement:false"` // comes from api
 		Name           string `gorm:"uniqueIndex;not null"`
 		Type1          string `gorm:"not null"`
 		Type2          *string
@@ -24,7 +27,7 @@ type (
 	}
 
 	Move struct {
-		ID            uint   `gorm:"primaryKey;autoIncrement"`
+		ID            uint   `gorm:"primaryKey;autoIncrement:false"` // comes from api
 		Name          string `gorm:"uniqueIndex;not null"`
 		Power         *int
 		Accuracy      *int
