@@ -18,7 +18,7 @@ const (
 	FOREIGNKEYSTR       string = "?_foreign_keys=on"
 	GEN1POKEMONCOUNT    int    = 151
 	SPRITEURLBASE       string = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-i/red-blue/transparent"
-	TradeEvolutionLevel uint   = 32
+	TradeEvolutionLevel int    = 32
 )
 
 type (
@@ -69,7 +69,8 @@ func FetchDataAndCreateDB(dbPath string, fOpts FetchFnOptions) (*gorm.DB, []erro
 
 func FetchPokemonData(client *http.Client) ([]PokeApiData, []error) {
 	fullApiData := make([]PokeApiData, 0, GEN1POKEMONCOUNT)
-	dataCh := make(chan Result[PokeApiData], GEN1POKEMONCOUNT)
+
+	dataCh := make(chan Result[*PokeApiData], GEN1POKEMONCOUNT)
 	sema := make(chan struct{}, 20) // to cap # goroutines running
 
 	wg := sync.WaitGroup{}
@@ -87,7 +88,7 @@ func FetchPokemonData(client *http.Client) ([]PokeApiData, []error) {
 	var errs []error
 	for r := range dataCh {
 		if r.IsOk() {
-			fullApiData = append(fullApiData, r.Value)
+			fullApiData = append(fullApiData, *r.Value)
 			fmt.Printf("Pokemon #%d, %s, %+v, \n", r.Value.ID, r.Value.Name, r.Value.NextEvolutions)
 			// fmt.Printf("%+v\n", r)
 		} else {

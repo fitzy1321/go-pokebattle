@@ -7,8 +7,8 @@ package dex
 // WARN: gorm db structs, do not change without understanding the consequences
 type (
 	Pokemon struct {
-		ID             uint   `gorm:"primaryKey;autoIncrement:false"` // comes from api
-		Name           string `gorm:"uniqueIndex;not null"`
+		ID             uint   `gorm:"primaryKey;autoIncrement:false;not null"` // comes from api
+		Name           string `gorm:"uniqueIndex:idx_pokemon_name;not null"`
 		Type1          string `gorm:"not null"`
 		Type2          *string
 		HP             int `gorm:"not null"`
@@ -27,8 +27,8 @@ type (
 	}
 
 	Move struct {
-		ID            uint   `gorm:"primaryKey;autoIncrement:false"` // comes from api
-		Name          string `gorm:"uniqueIndex;not null"`
+		ID            uint   `gorm:"primaryKey;autoIncrement:false;not null"` // comes from api
+		Name          string `gorm:"uniqueIndex:idx_move_name;not null"`
 		Power         *int
 		Accuracy      *int
 		MaxPP         int `gorm:"not null"`
@@ -42,7 +42,7 @@ type (
 	}
 
 	PokemonMove struct {
-		ID           uint `gorm:"primaryKey;autoIncrement"`
+		ID           uint `gorm:"primaryKey;autoIncrement;not null"`
 		PokemonID    uint `gorm:"uniqueIndex:idx_pokemon_move;not null"`
 		MoveID       uint `gorm:"uniqueIndex:idx_pokemon_move;not null"`
 		LevelLearned int  `gorm:"not null"`
@@ -53,13 +53,14 @@ type (
 	}
 
 	Evolution struct {
-		ID             uint `gorm:"primaryKey;autoIncrement"`
-		PokemonID      uint `gorm:"uniqueIndex:idx_evolution;not null"`
-		EvolvesIntoID  uint `gorm:"uniqueIndex:idx_evolution;not null"`
-		Trigger        *string
-		MinLevel       *int
-		Item           *string
-		IsPlayerChoice bool `gorm:"default:0"`
+		ID              uint `gorm:"primaryKey;autoIncrement;not null"`
+		PokemonID       uint `gorm:"uniqueIndex:idx_evolution;not null"`
+		EvolvesIntoID   uint `gorm:"uniqueIndex:idx_evolution;not null"`
+		EvolvesIntoName *string
+		Trigger         *string
+		MinLevel        *int
+		Item            *string
+		IsPlayerChoice  bool `gorm:"default:0"`
 
 		Pokemon     Pokemon `gorm:"foreignKey:PokemonID"`
 		EvolvesInto Pokemon `gorm:"foreignKey:EvolvesIntoID"`

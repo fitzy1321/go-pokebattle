@@ -52,6 +52,7 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 	var moves []dex.Move
 	var pokemonMoves []dex.PokemonMove
 	moveIdSet := mapset.NewSet[uint]()
+	var evolutions []dex.Evolution
 
 	for _, pitem := range apiData {
 		pokemon = append(pokemon, dex.Pokemon{
@@ -95,6 +96,22 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 				LearnMethod:  mitem.LearnMethod,
 			})
 		}
+
+		if len(pitem.NextEvolutions) == 0 {
+			continue
+		}
+
+		for _, evoRaw := range pitem.NextEvolutions {
+			evolutions = append(evolutions, dex.Evolution{
+				PokemonID:       pitem.ID,
+				EvolvesIntoID:   evoRaw.EvolvesIntoID,
+				EvolvesIntoName: evoRaw.EvolvesIntoName,
+				Trigger:         evoRaw.Trigger,
+				MinLevel:        evoRaw.MinLevel,
+				Item:            evoRaw.Item,
+				IsPlayerChoice:  len(pitem.NextEvolutions) > 1,
+			})
+		}
 	}
 
 	tx := db.CreateInBatches(pokemon, len(pokemon))
@@ -109,7 +126,10 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 	if tx.Error != nil {
 		return db, tx.Error
 	}
-	// TODO evolutions
+	tx = db.CreateInBatches(evolutions, len(evolutions))
+	if tx.Error != nil {
+		return db, tx.Error
+	}
 
 	return db, nil
 }

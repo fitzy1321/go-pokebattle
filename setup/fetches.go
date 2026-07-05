@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 
 	"io"
 	"net/http"
@@ -61,11 +62,11 @@ type (
 	}
 
 	NextEvoData struct {
-		EvolvesIntoID uint
-		EvolvesInto   string
-		Trigger       string
-		MinLevel      uint
-		Item          *string // nullable
+		EvolvesIntoID   uint
+		EvolvesIntoName *string
+		Trigger         *string
+		MinLevel        *int
+		Item            *string // nullable
 	}
 
 	Sprites struct {
@@ -80,30 +81,30 @@ type (
 	}
 )
 
-func topLevelPokemonData(client *http.Client, pokemonId uint) Result[PokeApiData] {
+func topLevelPokemonData(client *http.Client, pokemonId uint) Result[*PokeApiData] {
 	url := fmt.Sprintf("%s/pokemon/%d", BASEURL, pokemonId)
 
 	pokemap, err := networkHandler(client, url)
 	if err != nil {
-		return Err[PokeApiData](err)
+		return Err[*PokeApiData](err)
 	}
 
 	name := pokemap["name"].(string)
 
 	type1, type2, err := parsePTypes(pokemap)
 	if err != nil {
-		return Err[PokeApiData](err)
+		return Err[*PokeApiData](err)
 	}
 
 	mStats, err := parsePStats(pokemap)
 	if err != nil {
-		return Err[PokeApiData](err)
+		return Err[*PokeApiData](err)
 	} else if mStats == nil {
 		mStats = &PokemonStats{}
 	}
 
 	moveCh := make(chan Result[[]MoveData], 1)
-	spriteCh := make(chan Result[Sprites], 1)
+	spriteCh := make(chan Result[*Sprites], 1)
 	evoCh := make(chan Result[[]NextEvoData], 1)
 	grCh := make(chan Result[*string], 1)
 
@@ -137,37 +138,46 @@ func topLevelPokemonData(client *http.Client, pokemonId uint) Result[PokeApiData
 
 	moveRes := <-moveCh
 	if moveRes.IsErr() {
-		return Err[PokeApiData](moveRes.Error)
+		return Err[*PokeApiData](moveRes.Error)
 	}
+	moves := moveRes.Value
 
 	spriteRes := <-spriteCh
 	if spriteRes.IsErr() {
-		return Err[PokeApiData](spriteRes.Error)
+		return Err[*PokeApiData](spriteRes.Error)
 	}
+	sprites := spriteRes.Value
 
+	var growthRate *string = nil
 	grRes := <-grCh
 	if grRes.IsErr() {
-		return Err[PokeApiData](grRes.Error)
+		fmt.Fprintf(os.Stderr, "Error fetching evolution data: %+v", grRes.Error)
+	} else {
+		growthRate = grRes.Value
 	}
 
+	var evoData = []NextEvoData{}
 	evoRes := <-evoCh
 	if evoRes.IsErr() {
-		return Err[PokeApiData](evoRes.Error)
+		fmt.Fprintf(os.Stderr, "Error fetching evolution data: %+v", evoRes.Error)
+	} else {
+		evoData = evoRes.Value
 	}
 
 	baseExp := int(pokemap["base_experience"].(float64))
-	return Ok(PokeApiData{
+	pokemon := PokeApiData{
 		ID:             pokemonId,
 		Name:           name,
 		Type1:          type1,
 		Type2:          type2,
 		BaseExperience: &baseExp,
 		PokemonStats:   *mStats,
-		Moves:          moveRes.Value,
-		NextEvolutions: evoRes.Value,
-		GrowthRate:     grRes.Value,
-		Sprites:        spriteRes.Value,
-	})
+		Moves:          moves,
+		NextEvolutions: evoData,
+		GrowthRate:     growthRate,
+		Sprites:        *sprites,
+	}
+	return Ok(&pokemon)
 }
 
 func networkHandler(client *http.Client, url string) (dict, error) {
@@ -316,7 +326,7 @@ func getMovesData(client *http.Client, pokeData dict) Result[[]MoveData] {
 	return Ok(detailed)
 }
 
-func getSprites(client *http.Client, pokeId uint) Result[Sprites] {
+func getSprites(client *http.Client, pokeId uint) Result[*Sprites] {
 	if client == nil {
 		client = http.DefaultClient
 	}
@@ -333,29 +343,90 @@ func getSprites(client *http.Client, pokeId uint) Result[Sprites] {
 
 	ftResp, err := client.Get(frontUrl)
 	if err != nil {
-		return Err[Sprites](err)
+		return Err[*Sprites](err)
 	}
 	defer ftResp.Body.Close()
 
 	ftSprite, err := sprHandler(ftResp)
 	if err != nil {
-		return Err[Sprites](err)
+		return Err[*Sprites](err)
 	}
 
 	bkResp, err := client.Get(backUrl)
 	if err != nil {
-		return Err[Sprites](err)
+		return Err[*Sprites](err)
 	}
 	defer bkResp.Body.Close()
 
 	bkSprite, err := sprHandler(bkResp)
 	if err != nil {
-		return Err[Sprites](err)
+		return Err[*Sprites](err)
 	}
-	return Ok(Sprites{ftSprite, bkSprite})
+	return Ok(&Sprites{ftSprite, bkSprite})
 }
 
-func buildEvoEntry(client *http.Client, nextNode map[string]any) (*NextEvoData, error) {
+func getEvoData(client *http.Client, speciesData dict, targetPokemonName string) ([]NextEvoData, error) {
+	// WARN no `return nil, nil` here.
+	// WARN We need to return some value from this func, either an empty slice or error.
+	evoChain, ok := speciesData["evolution_chain"].(dict)
+	if !ok {
+		return nil, errors.New("'evolution_chain' missing from species data")
+	}
+	evoChainUrl, ok := evoChain["url"].(string)
+	if !ok {
+		return nil, errors.New("'url' missing from 'evolution_chain' data")
+	}
+	chainData, err := networkHandler(client, evoChainUrl)
+	if err != nil {
+		return nil, err
+	}
+	if chainData == nil {
+		return nil, fmt.Errorf("No additional chain data for species %s found", targetPokemonName)
+	}
+
+	result, err := _evoWalk(client, chainData["chain"].(dict), targetPokemonName)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func _evoWalk(client *http.Client, node dict, target string) ([]NextEvoData, error) {
+	species, ok := node["species"].(dict)
+	if !ok {
+		return nil, fmt.Errorf("'species' field missing for %s's chain data", target)
+	}
+	evolvesTo := node["evolves_to"].([]any)
+
+	if speciesName, ok := species["name"]; ok && speciesName == target {
+		entries := make([]NextEvoData, 0, len(evolvesTo))
+		for _, childRaw := range evolvesTo {
+			child := childRaw.(dict)
+			entry, err := _buildEvoEntry(client, child)
+			if err != nil {
+				return nil, err
+			}
+			if entry != nil {
+				entries = append(entries, *entry)
+			}
+		}
+		return entries, nil
+	}
+	for _, childRaw := range evolvesTo {
+		child, _ := childRaw.(dict)
+		result, err := _evoWalk(client, child, target)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil {
+			return result, nil
+		}
+	}
+	return []NextEvoData{}, nil
+}
+
+func _buildEvoEntry(client *http.Client, nextNode map[string]any) (*NextEvoData, error) {
 	species := nextNode["species"].(dict)
 	nextName := species["name"].(string)
 
@@ -368,9 +439,9 @@ func buildEvoEntry(client *http.Client, nextNode map[string]any) (*NextEvoData, 
 		detail = dict{}
 	}
 
-	var minLevel uint
+	var minLevel int
 	if lvl, ok := detail["min_level"].(float64); ok {
-		minLevel = uint(lvl)
+		minLevel = int(lvl)
 	}
 
 	trigger := detail["trigger"].(dict)["name"].(string)
@@ -399,72 +470,12 @@ func buildEvoEntry(client *http.Client, nextNode map[string]any) (*NextEvoData, 
 	}
 
 	return &NextEvoData{
-		EvolvesIntoID: uint(nextID),
-		EvolvesInto:   nextName,
-		Trigger:       trigger,
-		MinLevel:      minLevel,
-		Item:          item,
+		EvolvesIntoID:   uint(nextID),
+		EvolvesIntoName: &nextName,
+		Trigger:         &trigger,
+		MinLevel:        &minLevel,
+		Item:            item,
 	}, nil
-}
-
-func evoWalk(client *http.Client, node dict, target string) ([]NextEvoData, error) {
-	species := node["species"].(dict)
-	evolvesTo := node["evolves_to"].([]any)
-
-	if speciesName, ok := species["name"]; ok && speciesName == target {
-		entries := make([]NextEvoData, 0, len(evolvesTo))
-		for _, childRaw := range evolvesTo {
-			child := childRaw.(dict)
-			entry, err := buildEvoEntry(client, child)
-			if err != nil {
-				return nil, err
-			}
-			if entry != nil {
-				entries = append(entries, *entry)
-			}
-		}
-		return entries, nil
-	}
-	for _, childRaw := range evolvesTo {
-		child, _ := childRaw.(dict)
-		result, err := evoWalk(client, child, target)
-		if err != nil {
-			return nil, err
-		}
-		if result != nil {
-			return result, nil
-		}
-	}
-	return nil, nil
-}
-
-func getEvoData(client *http.Client, speciesData dict, targetPokemonName string) ([]NextEvoData, error) {
-	evo_chain, ok := speciesData["evolution_chain"].(dict)
-	if !ok {
-		return nil, nil // TODO is this ok?
-	}
-	evoChainUrl, ok := evo_chain["url"].(string)
-	if !ok {
-		return nil, nil
-	}
-	chainData, err := networkHandler(client, evoChainUrl)
-	if err != nil {
-		return nil, err
-	}
-	if chainData == nil {
-		return nil, nil
-	}
-
-	result, err := evoWalk(client, chainData["chain"].(dict), targetPokemonName)
-	if err != nil {
-		return nil, err
-	}
-
-	if result == nil {
-		return []NextEvoData{}, nil
-	}
-
-	return result, nil
 }
 
 func parsePTypes(data dict) (string, *string, error) {
