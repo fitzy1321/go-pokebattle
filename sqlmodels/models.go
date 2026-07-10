@@ -6,16 +6,16 @@ package sqlmodels
 // NOTE: A pointer means that field/column is nullable
 // WARN: gorm db structs, do not change without running migrations
 type (
-	SaveFile struct {
+	UserSave struct {
 		ID   uint   `gorm:"primarykey"`
 		Name string `gorm:"not null"`
 
-		PartyPokemon []PartyPokemon `gorm:"foreignKey:SaveFileID"`
+		PartyPokemon []PartyPokemon `gorm:"foreignKey:UserSaveID"`
 	}
 
 	PartyPokemon struct {
 		ID           uint `gorm:"primaryKey"`
-		SaveFileID   uint `gorm:"not null"`
+		UserSaveID   uint `gorm:"not null"`
 		PokemonID    uint `gorm:"not null"`
 		Nickname     *string
 		Level        uint

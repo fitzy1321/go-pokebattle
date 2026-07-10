@@ -5,7 +5,6 @@ import (
 	. "go-pokebattle/sqlmodels"
 	"strings"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -42,7 +41,7 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 		&Move{},
 		&PokemonMove{},
 		&Evolution{},
-		&SaveFile{},
+		&UserSave{},
 		&PartyPokemon{},
 		&PartyPokemonMove{},
 	)
@@ -54,7 +53,7 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 	pokemon := make([]Pokemon, 0, GEN1POKEMONCOUNT)
 	var moves []Move
 	var pokemonMoves []PokemonMove
-	moveIdSet := mapset.NewSet[uint]()
+	moveIdSet := make(map[uint]any)
 	var evolutions []Evolution
 
 	for _, pitem := range apiData {
@@ -74,9 +73,11 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 			FrontSprite:    pitem.Sprites.Front,
 			BackSprite:     pitem.Sprites.Back,
 		})
+
+		// NOTE: Deduplicate PokemonMoves -> Moves slice
 		for _, mitem := range pitem.Moves {
-			if !moveIdSet.Contains(mitem.ID) {
-				moveIdSet.Add(mitem.ID)
+			if _, has := moveIdSet[mitem.ID]; !has {
+				moveIdSet[mitem.ID] = struct{}{}
 				moves = append(moves, Move{
 					ID:            mitem.ID,
 					Name:          mitem.Name,
@@ -98,10 +99,6 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 				LevelLearned: mitem.LevelLearned,
 				LearnMethod:  mitem.LearnMethod,
 			})
-		}
-
-		if len(pitem.NextEvolutions) == 0 {
-			continue
 		}
 
 		for _, evoRaw := range pitem.NextEvolutions {

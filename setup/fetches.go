@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 
 	"io"
 	"net/http"
 
 	. "go-pokebattle/result"
-
-	mapset "github.com/deckarep/golang-set/v2"
 )
 
 type (
@@ -81,10 +80,14 @@ type (
 	}
 )
 
-func topLevelPokemonData(client *http.Client, pokemonId uint) Result[*PokeApiData] {
+type NetworkClient interface {
+	Get(url string) (resp *http.Response, err error)
+}
+
+func topLevelPokemonData(client NetworkClient, pokemonId uint) Result[*PokeApiData] {
 	url := fmt.Sprintf("%s/pokemon/%d", BASEURL, pokemonId)
 
-	pokemap, err := networkHandler(client, url)
+	pokemap, err := networkGetHandler(client, url)
 	if err != nil {
 		return Err[*PokeApiData](err)
 	}
@@ -118,7 +121,7 @@ func topLevelPokemonData(client *http.Client, pokemonId uint) Result[*PokeApiDat
 
 	go func() {
 		if speciesUrl, ok := pokemap["species"].(dict)["url"].(string); ok {
-			speciesData, err := networkHandler(client, speciesUrl)
+			speciesData, err := networkGetHandler(client, speciesUrl)
 			if err != nil {
 				grCh <- Err[*string](err)
 				evoCh <- Err[[]NextEvoData](err)
@@ -180,7 +183,20 @@ func topLevelPokemonData(client *http.Client, pokemonId uint) Result[*PokeApiDat
 	return Ok(&pokemon)
 }
 
-func networkHandler(client *http.Client, url string) (dict, error) {
+// this acts as a makeshift lru_cache(max_size=none)
+var (
+	requestCache = make(map[string]dict)
+	mu           sync.RWMutex
+)
+
+func networkGetHandler(client NetworkClient, url string) (dict, error) {
+	mu.RLock()
+	cResp, ok := requestCache[url]
+	mu.RUnlock()
+	if ok {
+		return cResp, nil
+	}
+
 	if client == nil {
 		client = http.DefaultClient
 	}
@@ -199,12 +215,57 @@ func networkHandler(client *http.Client, url string) (dict, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return dict{}, err
 	}
+
+	if data != nil {
+		mu.Lock()
+		requestCache[url] = data
+		mu.Unlock()
+	}
+
 	return data, nil
 }
 
-func getMovesData(client *http.Client, pokeData dict) Result[[]MoveData] {
-	var rbMoves []_mvIR
-	names := mapset.NewSet[string]()
+func getSprites(client NetworkClient, pokeId uint) Result[*Sprites] {
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	frontUrl := fmt.Sprintf("%s/%d.png", SPRITEURLBASE, pokeId)
+	backUrl := fmt.Sprintf("%s/back/%d.png", SPRITEURLBASE, pokeId)
+
+	sprHandler := func(resp *http.Response) ([]byte, error) {
+		if resp.Header.Get("Content-Type") == "image/png" {
+			return io.ReadAll(resp.Body)
+		}
+		return nil, fmt.Errorf("Wrong Content-Type from network response.%v", resp.Header.Get("Content-Type"))
+	}
+
+	ftResp, err := client.Get(frontUrl)
+	if err != nil {
+		return Err[*Sprites](err)
+	}
+	defer ftResp.Body.Close()
+
+	ftSprite, err := sprHandler(ftResp)
+	if err != nil {
+		return Err[*Sprites](err)
+	}
+
+	bkResp, err := client.Get(backUrl)
+	if err != nil {
+		return Err[*Sprites](err)
+	}
+	defer bkResp.Body.Close()
+
+	bkSprite, err := sprHandler(bkResp)
+	if err != nil {
+		return Err[*Sprites](err)
+	}
+	return Ok(&Sprites{ftSprite, bkSprite})
+}
+
+func getMovesData(client NetworkClient, pokeData dict) Result[[]MoveData] {
+	movesIR := make(map[string]_mvIR)
 
 	pokeMoves, ok := pokeData["moves"].([]any)
 	if !ok {
@@ -221,22 +282,21 @@ func getMovesData(client *http.Client, pokeData dict) Result[[]MoveData] {
 			vgd := vgdIR.(dict)
 			if vgd["version_group"].(dict)["name"].(string) == "red-blue" {
 				moveName := md["move"].(dict)["name"].(string)
-				if !names.Contains(moveName) {
-					names.Add(moveName)
-					rbMoves = append(rbMoves, _mvIR{
+				if _, has := movesIR[moveName]; !has {
+					movesIR[moveName] = _mvIR{
 						name:   moveName,
 						level:  int(vgd["level_learned_at"].(float64)),
 						url:    md["move"].(dict)["url"].(string),
 						method: vgd["move_learn_method"].(dict)["name"].(string),
-					})
+					}
 				}
 			}
 		} // end for
 	} // end for
 
 	var detailed []MoveData
-	for _, move := range rbMoves {
-		mvData, err := networkHandler(client, move.url)
+	for _, move := range movesIR {
+		mvData, err := networkGetHandler(client, move.url)
 		if err != nil {
 			// TODO: error handle, idk man ..
 		}
@@ -326,46 +386,7 @@ func getMovesData(client *http.Client, pokeData dict) Result[[]MoveData] {
 	return Ok(detailed)
 }
 
-func getSprites(client *http.Client, pokeId uint) Result[*Sprites] {
-	if client == nil {
-		client = http.DefaultClient
-	}
-
-	frontUrl := fmt.Sprintf("%s/%d.png", SPRITEURLBASE, pokeId)
-	backUrl := fmt.Sprintf("%s/back/%d.png", SPRITEURLBASE, pokeId)
-
-	sprHandler := func(resp *http.Response) ([]byte, error) {
-		if resp.Header.Get("Content-Type") == "image/png" {
-			return io.ReadAll(resp.Body)
-		}
-		return nil, fmt.Errorf("Wrong Content-Type from network response.%v", resp.Header.Get("Content-Type"))
-	}
-
-	ftResp, err := client.Get(frontUrl)
-	if err != nil {
-		return Err[*Sprites](err)
-	}
-	defer ftResp.Body.Close()
-
-	ftSprite, err := sprHandler(ftResp)
-	if err != nil {
-		return Err[*Sprites](err)
-	}
-
-	bkResp, err := client.Get(backUrl)
-	if err != nil {
-		return Err[*Sprites](err)
-	}
-	defer bkResp.Body.Close()
-
-	bkSprite, err := sprHandler(bkResp)
-	if err != nil {
-		return Err[*Sprites](err)
-	}
-	return Ok(&Sprites{ftSprite, bkSprite})
-}
-
-func getEvoData(client *http.Client, speciesData dict, targetPokemonName string) ([]NextEvoData, error) {
+func getEvoData(client NetworkClient, speciesData dict, targetPokemonName string) ([]NextEvoData, error) {
 	// WARN no `return nil, nil` here.
 	// WARN We need to return some value from this func, either an empty slice or error.
 	evoChain, ok := speciesData["evolution_chain"].(dict)
@@ -376,7 +397,7 @@ func getEvoData(client *http.Client, speciesData dict, targetPokemonName string)
 	if !ok {
 		return nil, errors.New("'url' missing from 'evolution_chain' data")
 	}
-	chainData, err := networkHandler(client, evoChainUrl)
+	chainData, err := networkGetHandler(client, evoChainUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +413,7 @@ func getEvoData(client *http.Client, speciesData dict, targetPokemonName string)
 	return result, nil
 }
 
-func _evoWalk(client *http.Client, node dict, target string) ([]NextEvoData, error) {
+func _evoWalk(client NetworkClient, node dict, target string) ([]NextEvoData, error) {
 	species, ok := node["species"].(dict)
 	if !ok {
 		return nil, fmt.Errorf("'species' field missing for %s's chain data", target)
@@ -426,7 +447,7 @@ func _evoWalk(client *http.Client, node dict, target string) ([]NextEvoData, err
 	return []NextEvoData{}, nil
 }
 
-func _buildEvoEntry(client *http.Client, nextNode map[string]any) (*NextEvoData, error) {
+func _buildEvoEntry(client NetworkClient, nextNode map[string]any) (*NextEvoData, error) {
 	species := nextNode["species"].(dict)
 	nextName := species["name"].(string)
 
@@ -459,7 +480,7 @@ func _buildEvoEntry(client *http.Client, nextNode map[string]any) (*NextEvoData,
 		item = nil
 	}
 
-	nextPokeData, err := networkHandler(client, fmt.Sprintf("%s/pokemon/%s/", BASEURL, nextName))
+	nextPokeData, err := networkGetHandler(client, fmt.Sprintf("%s/pokemon/%s/", BASEURL, nextName))
 	if err != nil {
 		return nil, err
 	}

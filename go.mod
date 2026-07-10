@@ -5,7 +5,6 @@ go 1.26.4
 require (
 	charm.land/bubbletea/v2 v2.0.8
 	github.com/charmbracelet/bubbles v1.0.0
-	github.com/deckarep/golang-set/v2 v2.9.0
 	golang.org/x/text v0.20.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
@@ -28,7 +27,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	go.mongodb.org/mongo-driver v1.17.4 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 )
