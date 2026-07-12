@@ -21,8 +21,13 @@ const (
 	TradeEvolutionLevel int    = 32
 )
 
+// type aliases
 type (
-	dict        = map[string]any
+	dict = map[string]any
+	pp_t = *PokeApiData
+)
+
+type (
 	PokeApiData struct {
 		ID             uint
 		Name           string
@@ -126,18 +131,19 @@ func FetchDataAndCreateDB(dbPath string, client *http.Client) (*gorm.DB, []error
 }
 
 func FetchPokemonData(client *http.Client) ([]PokeApiData, []error) {
-	dataCh := make(chan Result[*PokeApiData], GEN1POKEMONCOUNT)
+	dataCh := make(chan Result[pp_t], GEN1POKEMONCOUNT)
 	sema := make(chan struct{}, 20) // to cap # goroutines running
 
 	wg := sync.WaitGroup{}
 	for i := range GEN1POKEMONCOUNT {
 		pokeId := uint(i + 1)
 
-		wg.Go(func() {
-			sema <- struct{}{}        // add
-			defer func() { <-sema }() // done / release
-			dataCh <- topLevelPokemonData(client, pokeId)
-		})
+		wg.Add(1)
+		go func(id uint) {
+			sema <- struct{}{}                   // blocks when buf-chan is full
+			defer func() { <-sema; wg.Done() }() // unblocks buf-chan
+			dataCh <- topLevelPokemonData(client, id)
+		}(pokeId)
 	}
 	wg.Wait()
 	close(dataCh)

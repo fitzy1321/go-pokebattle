@@ -2,8 +2,9 @@ package mvu
 
 import (
 	"fmt"
-	"go-pokebattle/sqlmodels"
 	"time"
+
+	"go-pokebattle/sqlmodels"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/bubbles/key"
@@ -14,7 +15,7 @@ import (
 type (
 	// * Top Level Bubbletea Model
 	AppModel struct {
-		width, height uint
+		width, height int
 		viewState     viewState
 		internalAppState
 	}
@@ -71,12 +72,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewState = saveFileOrNewView
 			return m, nil
 		}
-	// case tea.WindowSizeMsg:
-	// 	m.tuiWidth, m.tuiHeight = uint(t.Width), uint(t.Height)
+	case tea.WindowSizeMsg:
+		m.width, m.height = t.Width, t.Height
 	case tea.KeyMsg:
 		switch {
 		// case key.Matches(t, keys.Enter):
-		case key.Matches(t, keys.Quit):
+		case key.Matches(t, keys.Quit, keys.Enter):
 			return m, tea.Quit
 		}
 	}

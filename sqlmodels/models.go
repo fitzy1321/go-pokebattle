@@ -78,7 +78,7 @@ type (
 		ID           uint `gorm:"primaryKey;autoIncrement;not null"`
 		PokemonID    uint `gorm:"uniqueIndex:idx_pokemon_move;not null"`
 		MoveID       uint `gorm:"uniqueIndex:idx_pokemon_move;not null"`
-		LevelLearned int  `gorm:"not null"`
+		LevelLearned int  `gorm:"not null;default:0"`
 		LearnMethod  *string
 
 		Pokemon Pokemon `gorm:"foreignKey:PokemonID"`

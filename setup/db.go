@@ -2,8 +2,9 @@ package setup
 
 import (
 	"fmt"
-	. "go-pokebattle/sqlmodels"
 	"strings"
+
+	. "go-pokebattle/sqlmodels"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

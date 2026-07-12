@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"sync"
-
 	"io"
 	"net/http"
+	"os"
+	"sync"
 
 	. "go-pokebattle/result"
 )
