@@ -38,10 +38,10 @@ func topLevelPokemonData(client HttpGetter, pokemonId uint) Result[pp_t] {
 		mStats = &PokemonStats{}
 	}
 
-	moveCh := make(chan Result[[]MoveData], 1)
-	spriteCh := make(chan Result[*Sprites], 1)
-	evoCh := make(chan Result[[]NextEvoData], 1)
-	grCh := make(chan Result[*string], 1)
+	moveCh := make(chan Result[[]MoveData])
+	spriteCh := make(chan Result[*Sprites])
+	evoCh := make(chan Result[[]NextEvoData])
+	grCh := make(chan Result[*string])
 
 	go func() {
 		moveCh <- getMovesData(client, pokemap)
