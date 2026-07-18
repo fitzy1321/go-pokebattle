@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"pogomon/consts"
 	"pogomon/mvu"
 	"pogomon/setup"
 
@@ -38,10 +39,10 @@ func appName() string {
 
 func getDataDir() (string, error) {
 	// 1. Check XDG_DATA_HOME first
-	dataHome := os.Getenv("XDG_DATA_HOME")
+	dataHome, ok := os.LookupEnv("XDG_DATA_HOME")
 
 	// 2. Fall back to OS-specific defaults
-	if dataHome == "" {
+	if !ok || dataHome == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("resolving home dir: %w", err)
@@ -70,13 +71,14 @@ func getDataDir() (string, error) {
 }
 
 func main() {
-	dbPath := "pokedata.db"
+	// TODO * fix dbFilePath for XDG and OS specific locations later
+	dbFilePath := consts.DBFILEPATH
 	var gdb *gorm.DB = nil
 
-	if !setup.FileExists(dbPath) {
+	if !setup.FileExists(dbFilePath) {
 		var errs []error
 		// * Fetch Data From PokeAPI, Create SQLite DB, seeded with API Data
-		gdb, errs = setup.FetchDataAndCreateDB(dbPath, nil)
+		gdb, errs = setup.FetchDataAndCreateDB(dbFilePath)
 		if errs != nil || len(errs) > 0 {
 			printErrExit(errs...)
 		}
@@ -85,7 +87,7 @@ func main() {
 		fmt.Scanln()
 	} else {
 		var err error = nil
-		gdb, err = setup.GetGormSqliteDB(dbPath)
+		gdb, err = setup.GetGormSqliteDB(dbFilePath)
 		if err != nil {
 			printErrExit(fmt.Errorf("Something failed connecting to pokemon db: %v\n", err))
 		}

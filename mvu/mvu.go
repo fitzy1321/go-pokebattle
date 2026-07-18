@@ -1,9 +1,11 @@
 package mvu
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
+	"pogomon/consts"
 	"pogomon/sqlmodels"
 
 	tea "charm.land/bubbletea/v2"
@@ -24,6 +26,7 @@ type (
 		DB          *gorm.DB
 		saveFiles   []saveFileStart
 		currentFile *sqlmodels.UserSave
+		pokedex     []sqlmodels.Pokemon
 	}
 
 	saveFileStart struct {
@@ -48,12 +51,23 @@ func NewAppModel(db *gorm.DB) (*AppModel, error) {
 		return nil, fmt.Errorf("There was a problem loading save files: %+v\n", result.Error)
 	}
 
+	var pokedex []sqlmodels.Pokemon
+	result = db.Find(&pokedex)
+	if result.Error != nil {
+		return nil, result.Error
+	} else if result.RowsAffected == 0 {
+		return nil, errors.New("No Pokemon found in db ...")
+	} else if result.RowsAffected > consts.GEN1POKEMONCOUNT_int64 {
+		return nil, fmt.Errorf("Too many pokemon have been found for GEN1 151 ... result.RowsAffected = %d", result.RowsAffected)
+	}
+
 	return &AppModel{
 		width: 0, height: 0,
 		viewState: titleView,
 		internalAppState: internalAppState{DB: db,
 			saveFiles:   saveFileStarts,
 			currentFile: nil,
+			pokedex:     pokedex,
 		},
 	}, nil
 }

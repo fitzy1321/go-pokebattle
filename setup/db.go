@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"pogomon/consts"
 	. "pogomon/sqlmodels"
 
 	"gorm.io/driver/sqlite"
@@ -53,7 +54,7 @@ func CreateAndSeedDB(apiData []PokeApiData, dbPath string) (*gorm.DB, error) {
 		return gdb, err
 	}
 
-	pokemon := make([]Pokemon, 0, GEN1POKEMONCOUNT)
+	pokemon := make([]Pokemon, 0, consts.GEN1POKEMONCOUNT)
 	var moves []Move
 	var pokemonMoves []PokemonMove
 	moveIdSet := make(map[uint]any)

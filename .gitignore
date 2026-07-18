@@ -1,3 +1,4 @@
 **/*.db*
 **/*.gob
 # mise.toml
+**/*.DS_Store
