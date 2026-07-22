@@ -3,7 +3,7 @@ package consts
 // * App Constants
 
 const (
-	CACHEFILE                string  = "POKEDATA_CACHE.gob"
+	CACHEFILE                string  = "pokedata_cache.gob"
 	DBFILEPATH               string  = "pokedata.db"
 	GEN1POKEMONCOUNT         int     = 151
 	GEN1POKEMONCOUNT_uint    uint    = uint(GEN1POKEMONCOUNT)

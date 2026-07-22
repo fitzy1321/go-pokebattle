@@ -36,34 +36,28 @@ func main() {
 	var gdb *gorm.DB = nil
 
 	if !utils.FileExists(dbFilePath) {
-		var errs []error
-		// * Fetch Data From PokeAPI, Create SQLite DB, seeded with API Data
-		gdb, errs = setup.FetchDataAndCreateDB(dbFilePath)
+		db, errs := setup.FetchDataAndCreateDB(dbFilePath)
 		if errs != nil || len(errs) > 0 {
 			printErrExit(errs...)
 		}
+		gdb = db
 	} else {
-		var err error = nil
-		gdb, err = setup.GetGormSqliteDB(dbFilePath)
+		db, err := setup.GetGormSqliteDB(dbFilePath)
 		if err != nil {
 			printErrExit(fmt.Errorf("Something failed connecting to pokemon db: %v\n", err))
 		}
+		gdb = db
 	}
 
-	// * Setup bubbletea inital model ...
 	model, err := mvu.NewAppModel(gdb)
 	if err != nil {
 		printErrExit(err)
 	}
 
-	// * Wait for terminal input before tui starts
-	fmt.Print("> ")
-	fmt.Scanln()
+	// fmt.Print("> ")
+	// fmt.Scanln()
 
-	// * Start Bubbletea TUI app
 	p := tea.NewProgram(*model)
-
-	// * Run Bubbletea app
 	if _, err := p.Run(); err != nil {
 		printErrExit(err)
 	}
