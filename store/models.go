@@ -1,5 +1,7 @@
 package store
 
+import "fmt"
+
 // NOTE: thoughts about integer typing below
 // NOTE: IDs = uints, because we'll never have a negative id value.
 // NOTE: Any other integer = ints, various moves and pokemon information could have negative values.
@@ -99,3 +101,8 @@ type (
 		EvolvesInto Pokemon `gorm:"foreignKey:EvolvesIntoID"`
 	}
 )
+
+// * Pokmon list.Item Interface (Title, Description, FilterValue)
+func (p Pokemon) Title() string       { return p.Name }
+func (p Pokemon) Description() string { return fmt.Sprintf("%s %s", p.Type1, *p.Type2) }
+func (p Pokemon) FilterValue() string { return fmt.Sprintf("%d", p.ID) }

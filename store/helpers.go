@@ -5,11 +5,11 @@ import (
 )
 
 func GetPokemon(db *gorm.DB) ([]Pokemon, error) {
-	var pokedex []Pokemon
-	result := db.Find(&pokedex)
+	var pokemon []Pokemon
+	result := db.Find(&pokemon)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	// fmt.Printf("Debugging db stuff %d\n", len(pokedex))
-	return pokedex, nil
+
+	return pokemon, nil
 }

@@ -22,6 +22,12 @@ func printErrExit(errs ...error) {
 
 func main() {
 	// TODO * fix dbFilePath for XDG and OS specific locations later
+	// dataDirPath, dErr := utils.GetDataDirPath()
+	// if dErr != nil {
+	// 	printErrExit(dErr)
+	// }
+
+	// dbFilePath := filepath.Join(dataDirPath, consts.DBFILEPATH)
 	_, dErr := utils.GetDataDirPath()
 	if dErr != nil {
 		printErrExit(dErr)

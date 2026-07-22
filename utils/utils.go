@@ -16,10 +16,11 @@ var GoModAppName string
 
 func init() {
 	info, ok := debug.ReadBuildInfo()
-	if !ok {
+	if !ok || info.Main.Path == "" {
 		GoModAppName = "pogomon"
+	} else {
+		GoModAppName = path.Base(info.Main.Path)
 	}
-	GoModAppName = path.Base(info.Main.Path)
 }
 
 func FileExists(path string) bool {

@@ -6,8 +6,9 @@ import (
 
 	"pogomon/store"
 
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/bubbles/key"
 	"gorm.io/gorm"
 )
 
@@ -17,6 +18,7 @@ type (
 	AppModel struct {
 		width, height int
 		viewState     viewState
+		pokemonList   list.Model
 		internalAppState
 	}
 
@@ -53,10 +55,15 @@ func NewAppModel(db *gorm.DB) (*AppModel, error) {
 	if err != nil {
 		return nil, err
 	}
+	var pitems []list.Item = make([]list.Item, len(pokedex))
+	for i, p := range pokedex {
+		pitems[i] = p
+	}
 
 	return &AppModel{
 		width: 0, height: 0,
-		viewState: titleView,
+		viewState:   titleView,
+		pokemonList: list.New(pitems, list.NewDefaultDelegate(), 0, 0),
 		internalAppState: internalAppState{
 			DB:          db,
 			saveFiles:   saveFileStarts,
@@ -74,18 +81,22 @@ func (m AppModel) Init() tea.Cmd {
 }
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch t := msg.(type) {
+	switch msg := msg.(type) {
 	case titleTickDoneMsg:
 		if m.viewState == titleView {
-			m.viewState = saveFileOrNewView
+			m.viewState = pokemonListView
 			return m, nil
 		}
 	case tea.WindowSizeMsg:
-		m.width, m.height = t.Width, t.Height
+		m.width, m.height = msg.Width, msg.Height
+		m.pokemonList.SetSize(msg.Width, msg.Height)
+		var cmd tea.Cmd
+		m.pokemonList, cmd = m.pokemonList.Update(msg)
+		return m, cmd
 	case tea.KeyMsg:
 		switch {
 		// case key.Matches(t, keys.Enter):
-		case key.Matches(t, keys.Quit, keys.Enter):
+		case key.Matches(msg, keys.Quit, keys.Enter):
 			return m, tea.Quit
 		}
 	}
@@ -95,10 +106,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m AppModel) View() tea.View {
 	var view tea.View
 	if m.viewState == titleView {
-		view = tea.NewView("Welcome to Pokebattle TUI!")
+		view = tea.NewView("Welcome to Pokebattle TUI!\nPress ctrl+q to quit")
 	}
 	if m.viewState == saveFileOrNewView {
 		view = tea.NewView("I have no idea what I'm doing ...\n  press q or ctrl+c to quit, I guess ...\n")
+	}
+
+	if m.viewState == pokemonListView {
+		view = tea.NewView(m.pokemonList.View())
 	}
 
 	return view
@@ -124,4 +139,5 @@ type viewState int
 const (
 	titleView viewState = iota
 	saveFileOrNewView
+	pokemonListView
 )
